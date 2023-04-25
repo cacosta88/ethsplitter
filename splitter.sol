@@ -53,6 +53,6 @@ contract ETHSplitter is Ownable {
 
     // Receive function to safely accept Ether sent to the contract
     receive() external payable {
-        // No specific implementation needed; the contract can now safely accept Ether
+
     }
 }
