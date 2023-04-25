@@ -8,18 +8,6 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract ETHSplitter is Ownable {
 
 // Function to split ETH among multiple recipients
-function withdraw() external onlyOwner {
-// Transfer any remaining Ether to the owner
-(bool success, ) = owner().call{value: address(this).balance}("");
-// If the transfer fails, revert the transaction
-require(success, "Withdrawal failed");
-    }
-
-// Receive function to safely accept Ether sent to the contract
-receive() external payable {
-
-    }
-}
 function splitETH(
     address payable[] calldata recipients, // Array of recipient addresses
     uint256[] calldata amounts             // Array of amounts to be sent to recipients
