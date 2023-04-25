@@ -20,7 +20,7 @@ contract ETHSplitter is Ownable {
         uint256 length = recipients.length;
         // Check that both input arrays have the same length
         require(length == amounts.length, "Array lengths must be equal");
-        // Limit the number of recipients to 100
+        // Limit the number of recipients to 100 - this limit has not been tested, may be too much. Consider alternatives to using a for loop and an array
         require(length <= 100, "Up to 100 recipients allowed");
 
         // Variable to store the total amount of Ether to be split
