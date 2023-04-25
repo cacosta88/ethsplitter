@@ -16,15 +16,16 @@ function splitETH(
     payable                                // Function can receive Ether
     onlyOwner                              // Function can only be called by the owner
 {
+    // Get the number of recipients from the recipients array
+    uint256 length = recipients.length;
     // Check that both input arrays have the same length
-    require(recipients.length == amounts.length, "Array lengths must be equal");
+    require(length == amounts.length, "Array lengths must be equal");
     // Limit the number of recipients to 100
-    require(recipients.length <= 100, "Up to 100 recipients allowed");
+    require(length <= 100, "Up to 100 recipients allowed");
 
     // Variable to store the total amount of Ether to be split
     uint256 totalAmount = 0;
-    // Get the number of recipients from the recipients array
-    uint256 length = recipients.length;
+
 
     // Calculate the total amount of Ether to be split
     for (uint256 i = 0; i < length; ++i) {
