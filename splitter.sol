@@ -28,6 +28,10 @@ contract ETHSplitter is Ownable {
 
         // Calculate the total amount of Ether to be split
         for (uint256 i = 0; i < length; ++i) {
+            // Check for zero address or invalid address recipients
+            require(recipients[i] != address(0), "Invalid recipient address");
+            // Check if the owner address is a recipient address
+            require(recipients[i] != owner(), "Owner address cannot be a recipient");
             totalAmount = totalAmount + amounts[i];
         }
 
