@@ -19,3 +19,7 @@ Here's a step-by-step breakdown of what the contract does:
 6 - The contract also includes a withdraw function that allows the owner to withdraw any remaining Ether in the contract.
 
 Lastly, there's a receive function that safely accepts Ether sent to the contract. This function doesn't do anything besides accepting Ether payments.
+
+DISCLAIMER: This smart contract has been put together for research purposes only.
+    It is not intended for use in production, and users should exercise caution and
+    conduct thorough testing and audits before using this or any other smart contract.
