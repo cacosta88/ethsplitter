@@ -1,62 +1,231 @@
-// Draft smart contract
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.19;
 
-// Importing OpenZeppelin's Ownable contract to handle contract ownership
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-// Defining a new contract named ETHSplitter that inherits from Ownable
-contract ETHSplitter is Ownable {
+/**
+ * @title ETHSplitter
+ * @notice A smart contract to split ETH or ERC20 tokens between multiple recipients.
+ * @dev This is intended for research and development purposes only. Use this contract at your
+ * own risk and discretion. 
+ */
 
-    // Function to split ETH among multiple recipients
+contract ETHSplitter is ReentrancyGuard {
+
+    address private _owner;
+
+    // Events 
+    event EthSplit(address indexed sender, uint256 totalAmount, address[] recipients, uint256[] amounts);
+    event EthSplitEqual(address indexed sender, uint256 totalAmount, address[] recipients);
+    event Erc20Split(address indexed sender, address[] recipients, uint256[] amounts);
+    event Erc20SplitEqual(address indexed sender, uint256 totalAmount, address[] recipients);
+
+    /**
+     * @notice The constructor sets the owner of the contract
+     */
+    constructor() {
+        _owner = msg.sender;
+    }
+
+    /**
+     * @notice A modifier to ensure that only the owner can perform certain actions
+     */
+    modifier onlyOwner() {
+        require(msg.sender == _owner, "Owner Only");
+        _;
+    }
+
+    /**
+     * @notice Splits the ETH amongst the given recipients, according to the specified amounts
+     * @param recipients The noble recipients of the ETH
+     * @param amounts The amounts each recipient shall receive
+     */
     function splitETH(
-        address payable[] calldata recipients, // Array of recipient addresses
-        uint256[] calldata amounts             // Array of amounts to be sent to recipients
+        address payable[] calldata recipients,
+        uint256[] calldata amounts
     )
-        external                               // Function can be called from external sources
-        payable                                // Function can receive Ether
-        onlyOwner                              // Function can only be called by the owner
+        external
+        payable
+        nonReentrant
     {
-        // Get the number of recipients from the recipients array
-        uint256 length = recipients.length;
-        // Check that both input arrays have the same length
-        require(length == amounts.length, "Array lengths must be equal");
-        // Limit the number of recipients to 100 - this limit has not been tested, may be too much. Consider alternatives to using a for loop and an array
-        require(length <= 100, "Up to 100 recipients allowed");
+        uint256 remainingAmount = _splitETH(recipients, amounts, msg.value);
+        emit EthSplit(msg.sender, msg.value, _convertToAddresses(recipients), amounts);
 
-        // Variable to store the total amount of Ether to be split
-        uint256 totalAmount = 0;
-
-        // Calculate the total amount of Ether to be split
-        for (uint256 i = 0; i < length; ++i) {
-            // Check for zero address or invalid address recipients
-            require(recipients[i] != address(0), "Invalid recipient address");
-            // Check if the owner address is a recipient address
-            require(recipients[i] != owner(), "Owner address cannot be a recipient");
-            totalAmount = totalAmount + amounts[i];
+        if (remainingAmount > 0) {
+            (bool success, ) = msg.sender.call{value: remainingAmount}("");
+            require(success, "Refund failed");
         }
+    }
 
-        // Check that the total amount to be split matches the Ether sent to the contract
-        require(totalAmount == msg.value, "Total split amount must equal sent value");
+    /**
+     * @notice Splits the ETH equally amongst the given recipients
+     * @param recipients The noble recipients of the ETH
+     */
+   function splitEqualETH(address payable[] calldata recipients) external payable nonReentrant {
+    uint256 totalAmount = msg.value;
+    uint256 rLength = recipients.length;
+    uint256 equalAmount = totalAmount / rLength;
+    uint256 remainingAmount = totalAmount % rLength;
 
-        // Transfer the specified amounts to the recipients
+    
+    require(msg.value >= rLength, "Min. 1 wei/recipient for splitting");
+    require(rLength <=25 && rLength >= 2, "Recipients: min. 2, max. 25");
+
+    uint256 sentAmount = 0;
+    for (uint256 i = 0; i < rLength; ++i) {
+        require(recipients[i] != address(0), "Invalid recipient address");
+        uint256 amountToSend = equalAmount;
+        if (i == 0) {
+            amountToSend = amountToSend + remainingAmount;
+        }
+        (bool success, ) = recipients[i].call{value: amountToSend}("");
+        require(success, "Transfer failed");
+        sentAmount = sentAmount + amountToSend;
+    }
+
+    emit EthSplitEqual(msg.sender, msg.value, _convertToAddresses(recipients));
+}
+
+    /**
+     * @notice Splits the ERC20 tokens amongst the given recipients, according to the specified amounts
+     * @param token The token of friendship to be shared amongst the recipients
+     * @param recipients The noble recipients of the ERC20 tokens
+     * @param amounts The amounts each recipient shall receive
+     */
+    function splitERC20(
+        address token,
+        address[] calldata recipients,
+        uint256[] calldata amounts
+    )
+        external
+        nonReentrant
+    {
+        IERC20 erc20Token = IERC20(token);
+        _transferTokensFromSenderToRecipients(erc20Token, recipients, amounts);
+        emit Erc20Split(msg.sender, recipients, amounts);
+    }
+
+    /**
+     * @notice Splits the ERC20 tokens equally amongst the given recipients
+     * @param token The token of friendship to be shared amongst the recipients
+     * @param recipients The noble recipients of the ERC20 tokens
+     * @param totalAmount The total amount to be shared
+     */
+    function splitEqualERC20(
+    address token,
+    address[] calldata recipients,
+    uint256 totalAmount
+) external nonReentrant {
+    IERC20 erc20Token = IERC20(token);
+
+    uint256 rLength = recipients.length;
+    require(rLength <=25 && rLength >= 2, "Recipients: min. 2, max. 25");
+    uint256 equalAmount = totalAmount / rLength;
+    require(equalAmount >= 1, "Split amt >= smallest unit");
+    uint256 remainingAmount = totalAmount % rLength;
+
+
+    uint256 sentAmount = 0;
+    for (uint256 i = 0; i < rLength; ++i) {
+
+        require(recipients[i] != address(0), "Invalid recipient address");
+
+        uint256 amountToSend = equalAmount;
+        if (i == 0) {
+            amountToSend = amountToSend + remainingAmount;
+        }
+        erc20Token.transferFrom(msg.sender, recipients[i], amountToSend);
+        sentAmount = sentAmount + amountToSend;
+    }
+
+    emit Erc20SplitEqual(msg.sender, sentAmount, recipients);
+}
+
+    /**
+     * @notice Internal function to split the ETH amongst the given recipients, according to the specified amounts
+     * @dev The contract gracefully returns any leftover dust to the sender
+     * @param recipients The noble recipients of the ETH
+     * @param amounts The amounts each recipient shall receive
+     * @param totalAvailable The total available ETH to be split
+     * @return remainingAmount The remaining ETH dust
+     */
+    function _splitETH(
+        address payable[] calldata recipients,
+        uint256[] memory amounts,
+        uint256 totalAvailable
+    )
+        internal
+        returns (uint256 remainingAmount)
+    {
+        uint256 length = recipients.length;
+        require(length == amounts.length, "Array lengths must be equal");
+        require(length >= 2 && length <= 25, "Recipients: min. 2, max. 25"); //TODO: need to consider reasonable limits
+        
+        uint256 totalAmount = 0;
         for (uint256 i = 0; i < length; ++i) {
-            // Transfer Ether to the recipient and check for success
+            require(recipients[i] != address(0), "Invalid recipient address");
+            require(amounts[i] >= 1 wei, "Split amt >= smallest unit");
+            totalAmount = totalAmount + amounts[i];
+            require(totalAmount <= totalAvailable, "Total split <= available balance");
+  
             (bool success, ) = recipients[i].call{value: amounts[i]}("");
-            // If the transfer fails, revert the transaction
             require(success, "Transfer failed");
         }
+
+        return totalAvailable - totalAmount;
     }
 
-    // Function to allow the owner to withdraw any remaining Ether in the contract
-    function withdraw() external onlyOwner {
-        // Transfer any remaining Ether to the owner
-        (bool success, ) = owner().call{value: address(this).balance}("");
-        // If the transfer fails, revert the transaction
-        require(success, "Withdrawal failed");
+    /**
+     * @notice Internal function to transfer ERC20 tokens from the sender to the recipients
+     * @param erc20Token The ERC20 token to be shared
+     * @param recipients The noble recipients of the tokens
+     * @param amounts The amounts each recipient shall receive
+     */
+    function _transferTokensFromSenderToRecipients(
+        IERC20 erc20Token,
+        address[] calldata recipients,
+        uint256[] memory amounts
+    )
+        internal
+    {
+        uint256 length = recipients.length;
+
+        require(length == amounts.length, "Array lengths must be equal");
+        require(length >= 2 && length <= 25, "Recipients: min. 2, max. 25"); //TODO: need to consider reasonable limits
+        uint256 totalAmount = 0;
+        for (uint256 i = 0; i < length; ++i) {
+            require(recipients[i] != address(0), "Invalid recipient address");
+            require(amounts[i] >= 1, "Split amt >= smallest unit");
+            erc20Token.transferFrom(msg.sender, recipients[i], amounts[i]);
+            totalAmount = totalAmount + amounts[i];
+        }}
+
+/**
+     * @notice Internal function to convert an array of payable addresses to an array of regular addresses
+     * @param recipients The array of payable addresses
+     * @return _recipients The array of regular addresses
+     */
+    function _convertToAddresses(address payable[] memory recipients) internal pure returns (address[] memory) {
+        address[] memory _recipients = new address[](recipients.length);
+        for (uint256 i = 0; i < recipients.length; ++i) {
+            _recipients[i] = recipients[i];
+        }
+        return _recipients;
     }
 
-    // Receive function to safely accept Ether sent to the contract
-    receive() external payable {
-
+    /**
+     * @notice Withdraws the remaining ETH or ERC20 tokens to the owner's address
+     * @param token The address of the ERC20 token, or 0 for ETH
+     */
+    function withdraw(address token) external onlyOwner {
+        if (token == address(0)) {
+            (bool success, ) = _owner.call{value: address(this).balance}("");
+            require(success, "Withdrawal failed");
+        } else {
+            IERC20 erc20Token = IERC20(token);
+            erc20Token.transfer(_owner, erc20Token.balanceOf(address(this)));
+        }
     }
+
+    receive() external payable {}
 }
