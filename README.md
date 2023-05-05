@@ -22,4 +22,4 @@ An internal function to convert an array of payable addresses to an array of reg
 Withdraws the remaining ETH or ERC20 tokens to the contract owner's address.
 The contract also includes a receive() function to accept ETH payments.
 
-This contract is designed for research and development purposes and should be used with caution. It includes an owner-only modifier to restrict certain actions to the contract owner and uses the ReentrancyGuard contract to protect against reentrancy attacks.
+This contract is designed for research and development purposes and should be used with caution.
